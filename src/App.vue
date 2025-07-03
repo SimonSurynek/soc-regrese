@@ -27,25 +27,10 @@ function chrom_evaluate(chrom, valX) {
     var in2 = chrom[i * 3 + 1];
     var fn = chrom[i * 3 + 2];
 
-  if (in1 == 0) {
-      in1 = valX;
-    } else if (in1 == 100) {
-      in1 = 1;
-    } else if (in1 == 101) {
-      in1 = 0;
-    } else {
-      in1 = values[in1];
-    }
 
-    if (in2 == 0) {
-      in2 = valX;
-    } else if (in2 == 100) {
-      in2 = 1;
-    } else if (in2 == 101) {
-      in2 = 0;
-    } else {
-      in2 = values[in2];
-    }
+    in1 = values[in1];
+    in2 = values[in2];
+    
 
     if (fn == 0) {
       values[i + 1] = in1 + in2;
