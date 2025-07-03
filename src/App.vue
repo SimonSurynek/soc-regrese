@@ -79,6 +79,8 @@ function PocitaniY() {
     y: chrom_evaluate([0, 0, 4, 0, 1, 1, 0, 1, 1, 2, 100, 0, 0, 3, 4, 4], x)
   }));
 
+  // komentar
+
   HodnotyY.value = Vysledky;
 }
 
