@@ -7,6 +7,7 @@ const vstupniCisla = ref("");
 
 const COLS = 100;
 const chromozom = ref([]); 
+const zobrazit = ref(false);
 
 
 function GenerovaniChromozomu() {
@@ -19,8 +20,8 @@ function GenerovaniChromozomu() {
       PovoleneVstupy.push(x + 1);
     }
 
-    PovoleneVstupy.push(100);
-    PovoleneVstupy.push(101);
+    PovoleneVstupy.push(1000);
+    PovoleneVstupy.push(1001);
 
     const in1 = PovoleneVstupy[Math.floor(Math.random() * PovoleneVstupy.length)];
     const in2 = PovoleneVstupy[Math.floor(Math.random() * PovoleneVstupy.length)];
@@ -41,8 +42,8 @@ function GenerovaniChromozomu() {
 function chrom_evaluate(chrom, valX) {
   var values = [];
   values[0] = valX;
-  values[100] = 1;
-  values[101] = 0;
+  values[1000] = 0;
+  values[1001] = 1;
   console.log("chrom", chrom);
 
   for (let i = 0; i < COLS; i++) {
@@ -62,7 +63,10 @@ function chrom_evaluate(chrom, valX) {
     } else if (fn == 3) {
       values[i + 1] = (in2 !== 0) ? in1 / in2 : 0; 
     } else if (fn == 4) {
-      values[i + 1] = Math.sqrt(in1); 
+      values[i + 1] = in1 >= 0 ? Math.sqrt(in1) : 0;
+    }
+    if (isNaN(values[i + 1])) {
+      values[i + 1] = 1;
     }
 
     console.log("Krok", i, "PrvniCislo", in1, "DruheCislo", in2, "FunkceCislo", fn, "Vysledek", values[i + 1]);
@@ -100,6 +104,16 @@ const mensiCisla = computed(() => {
   }
   return vysledek;
 });
+function ZobrazHodnotu() {
+  zobrazit.value = true;
+}
+
+function MutaceChromozomu(chrom) {
+  const index = Math.floor(Math.random() * chrom.length);
+  const newValue = Math.floor(Math.random() * 100); 
+  chrom[index] = newValue;
+  console.log(`Mutace na indexu ${index}, nová hodnota: ${newValue}`);
+}
 </script>
 
 <template>
@@ -119,6 +133,9 @@ const mensiCisla = computed(() => {
     <div>f(x) = 2*√x + 2*x</div>
     <button @click="GenerovaniChromozomu">Generuj náhodný chromozom</button>
     <button @click="PocitaniY">Spočítej y pro vybraná čísla</button>
+    <button @click="ZobrazHodnotu">Zobraz Chromozom</button>
+    <button @click="MutaceChromozomu(chromozom)">Mutuj Chromozom</button>
+    <p v-if="zobrazit"> Chromozom: {{ chromozom }}</p>
 
     <table border="1" cellspacing="0" cellpadding="5">
       <thead>
@@ -157,5 +174,8 @@ button {
   background-color: #ae3131;
   color: #fff;
   font-weight: bold;
+}
+table {
+  margin:auto;
 }
 </style>
