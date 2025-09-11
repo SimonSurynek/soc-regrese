@@ -110,10 +110,19 @@ function ZobrazHodnotu() {
 
 function MutaceChromozomu(chrom) {
   const index = Math.floor(Math.random() * chrom.length);
+  if (index % 3 === 2) {
+    const newFn = Math.floor(Math.random() * 5); 
+    chrom[index] = newFn;
+    console.log(`Mutace na indexu ${index}, nová funkce: ${newFn}`);
+    
+  }
+  else{
   const newValue = Math.floor(Math.random() * index); 
   chrom[index] = newValue;
   console.log(`Mutace na indexu ${index}, nová hodnota: ${newValue}`);
 }
+}
+
 </script>
 
 <template>
