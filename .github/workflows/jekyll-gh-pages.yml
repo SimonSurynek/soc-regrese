@@ -22,23 +22,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Build job
+  # Build j*b
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Build with Jekyll
-        uses: actions/jekyll-build-pages@v1
-        with:
-          source: ./
-          destination: ./_site
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+     - uses: actions/checkout@v4
+     - name: Use Node.js ${{ matrix.node-version }}
+       uses: actions/setup-node@v4
+       with:
+         node-version: 18.x
+         cache: 'npm'
+     - run: npm ci
+     - run: npm run build --if-present
+     #- run: npm test
+   # create artifact
 
-  # Deployment job
+     - name: Upload artifact
+       uses: actions/upload-pages-artifact@v3
+       with:
+         path: dist/
+
+  # Deployment j*b
   deploy:
     environment:
       name: github-pages

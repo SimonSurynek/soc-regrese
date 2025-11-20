@@ -1,8 +1,12 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-// https://vite.dev/config/
+
+// ...existing code...
 export default defineConfig({
-  base: '/soc-regrese/',
+  // nechte base zakomentované pro lokální běh
+  // base: process.env.NODE_ENV === 'production' ? '/soc-regrese/' : '/',
+  // base: '/soc-regrese/',
   plugins: [vue()],
 })
+// ...existing code...
