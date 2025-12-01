@@ -6,7 +6,7 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   // nechte base zakomentované pro lokální běh
   // base: process.env.NODE_ENV === 'production' ? '/soc-regrese/' : '/',
-  // base: '/soc-regrese/',
+   base: '/soc-regrese/',
   plugins: [vue()],
 })
 // ...existing code...
