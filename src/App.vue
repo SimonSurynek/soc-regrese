@@ -537,26 +537,9 @@ return VyslednyPredpis;
       </main>
     </div>
   </template>
-  <style>
-   /*Globální reset - aplikuje se na celou stránku 
-  html, body, #app {
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden;
-    
-  }*/
-</style>
+  
 
   <style scoped>
-
-  /* Reset */
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root, html, body, #app {
-    height: 100%;
-    width: 100%;
-    overflow: hidden;
-  }
 
   /* Grid container */
   #container {
