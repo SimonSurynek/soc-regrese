@@ -1,5 +1,5 @@
 <script setup>
-  import { ref, onMounted, nextTick } from 'vue'
+  import { ref, onMounted, nextTick, watch } from 'vue'
   import { Chart } from 'chart.js/auto'
 
   const log = ref("");
@@ -10,12 +10,12 @@
 
   const vstupniCisla = ref("1,2,3,4,5,6,7,8,9,10");
 
-  const COLS = 10;
+  const COLS = ref(10); // počet funkčních bloků v chromozomu
   const chromozom = ref([]); 
   const zobrazit = ref(false);
-  const VelikostChromozomu = 3;
-  const lambda = 10;
-  const PocetIteraci = 1000;
+  const VelikostChromozomu = 3;  // počet genů na jeden funkční blok (fixní hodnota 3)
+  const lambda = ref(10);
+  const PocetIteraci = ref(1000);
   const vybranyDataset = ref('LinearniZavislost.csv');
   const nactenaData = ref([]);
   const chartCanvas = ref(null);
@@ -69,7 +69,7 @@
   function GenerovaniChromozomu() {
     const chrom = [];
 
-    for (let i = 0; i < COLS; i++) {  
+    for (let i = 0; i < COLS.value; i++) {  
       const PovoleneVstupy = [];
 
       if (i === 0) {
@@ -92,9 +92,9 @@
       const fn = Math.floor(Math.random() * vybraneFunkce.value.length); // přidej .value
 
       chrom.push(in1, in2, fn);
-    }
+    } 
 
-    chrom.push(COLS - 1); 
+    chrom.push(COLS.value - 1); 
     chromozom.value = chrom; 
     console.log("Generovany chromozom", chrom);
     return chrom;
@@ -111,7 +111,7 @@
   values[1009] = 5;
   values[1010] = -0.5;
 
-  for (let i = 0; i < COLS; i++) {
+  for (let i = 0; i < COLS.value; i++) {
     let in1 = chrom[i * VelikostChromozomu + 0];
     let in2 = chrom[i * VelikostChromozomu + 1];
     let fn = chrom[i * VelikostChromozomu + 2];
@@ -161,7 +161,7 @@
     values[i+1] = result;
   }
 
-  const idout = chrom[COLS * VelikostChromozomu]; 
+  const idout = chrom[COLS.value * VelikostChromozomu]; 
   const finalResult = values[idout];
   
   // Ošetři finální výsledek
@@ -194,7 +194,7 @@
     const index = Math.floor(Math.random() * (chrom.length - 1)); // poslední prvek (output) nemutuje
     if (index === 0) return;
 
-    if (index % VelikostChromozomu === 2) {
+    if (index % VelikostChromozomu.value === 2) {
       chrom[index] = Math.floor(Math.random() * vybraneFunkce.value.length);
     } else {
       const PovolenaCisla = [];
@@ -274,13 +274,13 @@
   let bestOffspring = [...parent];
   let bestOffspringFitness = bestFitness;
 
-  for (let g = 0; g < PocetIteraci; g++) {
+  for (let g = 0; g < PocetIteraci.value; g++) {
     if (zastavitEvoluci.value) {
       logEvo.value.push(`Evoluce byla zastavena uživatelem na generaci ${g}.`);
       EvoluceProbiha.value = false;
       break;
     }
-    for (let i = 0; i < lambda; i++){
+    for (let i = 0; i < lambda.value; i++){
       let offspring = [...parent];
       MutaceChromozomu(offspring);
       let offspringFitness = VypocitejFitness(offspring);
@@ -418,19 +418,69 @@ function FunkcniPredpis(index) {
   const in2 = FunkcniPredpis(in2Index);
   const operatory = vybraneFunkce.value;
   let VyslednyPredpis = "";
+  const needsParens = (expr) => {
+    return expr.includes('+') || expr.includes('-') || expr.includes('\\cdot') || expr.includes('\\div');
+  };
   switch(operatory[fnIndex]) {
-    case "plus": VyslednyPredpis = `(${in1} + ${in2})`; break;
-    case "krat": VyslednyPredpis = `(${in1} * ${in2})`; break;
-    case "minus": VyslednyPredpis = `(${in1} - ${in2})`; break;
-    case "deleno": VyslednyPredpis = `(${in1} / ${in2})`; break;
-   case "sqrt": VyslednyPredpis = `sqrt(${in1})`; break;
-    case "sin": VyslednyPredpis = `sin(${in1})`; break;              
-    case "log": VyslednyPredpis = `log(${in1})`; break;
-    default: VyslednyPredpis = in1; break;
+      case "plus": 
+        VyslednyPredpis = `${in1} + ${in2}`; 
+        break;
+      case "krat": 
+        const left = needsParens(in1) ? `(${in1})` : in1;
+        const right = needsParens(in2) ? `(${in2})` : in2;
+        VyslednyPredpis = `${left} \\cdot ${right}`; 
+        break;
+      case "minus": 
+        VyslednyPredpis = `${in1} - ${in2}`; 
+        break;
+      case "deleno": 
+        VyslednyPredpis = `\\frac{${in1}}{${in2}}`; 
+        break;
+      case "sqrt": 
+        VyslednyPredpis = `\\sqrt{${in1}}`; 
+        break;
+      case "sin": 
+        VyslednyPredpis = `\\sin(${in1})`; 
+        break;              
+      case "log": 
+        VyslednyPredpis = `\\log(${in1})`; 
+        break;
 }
 return VyslednyPredpis;
 }
-  nactiDataset();
+// MathJax pro správné vykreslení vzorců
+onMounted(() => {
+  if (!window.MathJax) {
+    window.MathJax = {
+      tex: { 
+        inlineMath: [['$', '$'], ['\\(', '\\)']] 
+      },
+      startup: {
+        ready: () => {
+          window.MathJax.startup.defaultReady();
+          window.MathJax.startup.promise.then(() => {
+            console.log('MathJax loaded');
+          });
+        }
+      }
+    };
+    
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+    script.async = true;
+    document.head.appendChild(script);
+  }
+});
+
+// Watch pro re-render MathJax když se změní předpis
+watch(predpisFunkce, () => {
+  nextTick(() => {
+    if (window.MathJax && window.MathJax.typesetPromise) {
+      window.MathJax.typesetPromise().catch((err) => console.log(err));
+    }
+  });
+});
+nactiDataset();
   </script>
 
   <template>
@@ -473,6 +523,24 @@ return VyslednyPredpis;
             </label>
           </div>
         </div>
+        <div class="nastaveni-panel">
+          <h3>Nastavení evoluce:</h3>
+  
+            <label class="param-label">
+              <span>Lambda (λ):</span>
+              <input type="number" v-model.number="lambda" min="1" max="100" class="param-input">
+            </label>
+  
+            <label class="param-label">
+              <span>Počet iterací:</span>
+              <input type="number" v-model.number="PocetIteraci" min="10" max="10000" step="10" class="param-input">
+            </label>
+  
+            <label class="param-label">
+              <span>Délka chromozomu:</span>
+              <input type="number" v-model.number="COLS" min="3" max="20" class="param-input">
+            </label>
+        </div>
       </aside>
 
       <main id="PravaCast">
@@ -504,10 +572,12 @@ return VyslednyPredpis;
         <div id="FunkcniCast">
           <div class="info-box">
             <h4>Funkční předpis:</h4>
-            <p>f(x) = {{ predpisFunkce }}</p>
+            <div class="math-formula">
+              $f(x) = {{ predpisFunkce || 'x' }}$
+            </div>
           </div>
           
-          <div class="info-box" v-if="zobrazit">
+          <div class="info-box" id="Chrom-box" v-if="zobrazit">
             <h4>Chromozom:</h4>
             <p>{{ chromozom }}</p>
           </div>
@@ -621,6 +691,51 @@ return VyslednyPredpis;
   .funkce-item input[type="checkbox"] {
     margin-right: 6px;
   }
+
+  .nastaveni-panel {
+  background: #2a2a2a;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #444;
+}
+
+.nastaveni-panel h3 {
+  color: white;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.param-label {
+  display: flex;
+  flex-direction: column;
+  color: white;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.param-label span {
+  margin-bottom: 4px;
+}
+
+.param-input {
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: white;
+  padding: 6px 8px;
+  font-size: 14px;
+  width: 100%;
+}
+
+.param-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.param-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
   /* Pravá část */
   #PravaCast {
@@ -779,14 +894,20 @@ return VyslednyPredpis;
     border: 1px solid #333;
     overflow: hidden;
     display: flex;
-    flex-direction: column;
+    flex-direction: row; /* ← ZMĚNA z column na row */
+    align-items: center; /* ← PŘIDEJ toto pro vertikální zarovnání */
+    gap: 8px; /* ← PŘIDEJ mezeru mezi h4 a vzorcem */
+  }
+
+  #Chrom-box {
+    flex-direction: column; /* ← Chromozom zůstane ve sloupci */
+    gap: 0px;
   }
 
   .info-box h4 {
     color: white;
     font-size: 13px;
-    margin-bottom: 4px;
-    flex-shrink: 0;
+    margin-bottom: 0px;
   }
 
   .info-box p {
@@ -797,6 +918,23 @@ return VyslednyPredpis;
     overflow-y: hidden;
     scrollbar-width: none; /* ← Firefox */
     -ms-overflow-style: none; /* ← IE/Edge */
+  }
+  .math-formula {
+  color: #aaa;
+  font-size: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+  scrollbar-width: thin;
+  }
+
+  .math-formula::-webkit-scrollbar {
+  height: 4px;
+  }
+
+  .math-formula::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 2px;
   }
 
   /* Schová scrollbar v Chrome/Safari */
