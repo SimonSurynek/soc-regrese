@@ -16,6 +16,7 @@
   const VelikostChromozomu = 3;  // počet genů na jeden funkční blok (fixní hodnota 3)
   const lambda = ref(10);
   const PocetIteraci = ref(1000);
+  const PravdepodobnostMutace = ref(0.05);
   const vybranyDataset = ref('LinearniZavislost.csv');
   const nactenaData = ref([]);
   const chartCanvas = ref(null);
@@ -191,8 +192,10 @@
 
   // ----- Mutace chromozomu -----
   function MutaceChromozomu(chrom) {
-    const index = Math.floor(Math.random() * (chrom.length - 1)); // poslední prvek (output) nemutuje
-    if (index === 0) return;
+    const pocetMutaci = Math.max(1, Math.floor((chrom.length - 1) * PravdepodobnostMutace.value));
+    for (let m = 0; m < pocetMutaci; m++) {
+    const index = Math.floor(Math.random() * (chrom.length - 1));
+    if (index === 0) continue;
 
     if (index % VelikostChromozomu.value === 2) {
       chrom[index] = Math.floor(Math.random() * vybraneFunkce.value.length);
@@ -205,6 +208,7 @@
       chrom[index] = PovolenaCisla[Math.floor(Math.random() * PovolenaCisla.length)];
     }
   }
+}
 
   // ----- Fitness funkce -----
  function VypocitejFitness(chrom) {
@@ -254,8 +258,29 @@
   if (!pouziteVstupy) {
     return -Infinity;
   }
+  // Penalizace za složitost, dá se experimentovat s hodnotou
+  const aktivniUzly = SpocitejAktivniUzly(chrom);
+  const komplexitaPenalizace = aktivniUzly * 0.001; // váha penalizace za složitost
   
-  return -mse;
+  return -(mse + komplexitaPenalizace);
+}
+// Pomocná funkce pro spočítání aktivních uzlů
+function SpocitejAktivniUzly(chrom) {
+  const aktivni = new Set();
+  const output = chrom[chrom.length - 1];
+  
+  function WatchChromozom(index) {
+    if (index <= 0 || index >= 1005 || aktivni.has(index)) return;
+    aktivni.add(index);
+    
+    const in1 = chrom[(index-1) * VelikostChromozomu + 0];
+    const in2 = chrom[(index-1) * VelikostChromozomu + 1];
+    WatchChromozom(in1);
+    WatchChromozom(in2);
+  }
+
+  WatchChromozom(output);
+  return aktivni.size;
 }
 
   // ----- Evoluční algoritmus -----
@@ -539,6 +564,10 @@ nactiDataset();
             <label class="param-label">
               <span>Délka chromozomu:</span>
               <input type="number" v-model.number="COLS" min="3" max="20" class="param-input">
+            </label>
+            <label class="param-label">
+              <span>Pravděpodobnost mutace:</span>
+              <input type="number" v-model.number="PravdepodobnostMutace" min="0" max="0.5" step="0.01" class="param-input">
             </label>
         </div>
       </aside>
