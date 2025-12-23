@@ -4,7 +4,7 @@ import { Chart } from 'chart.js/auto'
 
 const log = ref("");
 
-
+// Stavy evoluce  pro tlacitko
 const EvoluceProbiha = ref(false);
 const zastavitEvoluci = ref(false);
 
@@ -19,18 +19,13 @@ const pocetEvolKonstant = ref(3);
 const typInicializace = ref('random');
 const PocetKandidatu = ref(100);
 
+// Parametry evolučního algoritmu
 const COLS = ref(10); // počet funkčních bloků v chromozomu
 const chromozom = ref([]);
-const zobrazit = ref(false);
 const VelikostChromozomu = 3;  // počet genů na jeden funkční blok (fixní hodnota 3)
 const lambda = ref(10);
 const PocetIteraci = ref(1000);
 const PravdepodobnostMutace = ref(0.05);
-const vybranyDataset = ref('LinearniZavislost.csv');
-const nactenaData = ref([]);
-const chartCanvas = ref(null);
-const logEvo = ref([]);
-let chartInstance = null;
 const dostupneFunkce = [
   { name: "plus", label: "+" },
   { name: "minus", label: "-" },
@@ -42,6 +37,18 @@ const dostupneFunkce = [
 ];
 const vybraneFunkce = ref(["plus", "minus", "krat", "deleno", "log", "sqrt", "sin"]);
 
+// Data a datasety
+const vybranyDataset = ref('LinearniZavislost.csv');
+const nactenaData = ref([]);
+
+// Graf, logy, tabulka
+const chartCanvas = ref(null);
+const logEvo = ref([]);
+const zobrazit = ref(false);
+let chartInstance = null;
+const HodnotyY = ref([]);
+
+// --------Načítání datasetu, zpracování---------
 async function nactiDataset() {
   try {
     const response = await fetch(`${import.meta.env.BASE_URL}Datasets/${vybranyDataset.value}`);
@@ -56,6 +63,7 @@ async function nactiDataset() {
     console.log('Lines:', lines);
     console.log('Lines count:', lines.length);
 
+    // Odstranění hlavičky a parsování dat
     nactenaData.value = lines.slice(1).map(line => {
       const [x, y] = line.split(';').map(Number);
       console.log('Parsed:', { x, y });
@@ -74,7 +82,10 @@ async function nactiDataset() {
   }
 }
 
-//Funkce pro generování fixních konstant
+// Načtení výchozího datasetu při spuštění aplikace
+nactiDataset();
+
+// ---------Funkce pro generování fixních konstant---------
 function VygenerujFixniKonstanty() {
   const konstanty = [];
   const pocet = pocetFixnichKonstant.value;
@@ -97,7 +108,7 @@ function VygenerujFixniKonstanty() {
   return [0]; // fallback
 }
 
-//Funkce pro generování Gaussova normálového rozdělení
+// ------Funkce pro generování Gaussova normálového rozdělení--------
 function gaussianRandom(mean = 0, stdev = 1) {
   const u = 1 - Math.random();
   const v = Math.random();
@@ -105,7 +116,7 @@ function gaussianRandom(mean = 0, stdev = 1) {
   return z * stdev + mean;
 }
 
-// ----- Generování náhodného chromozomu -----
+// --------Generování náhodného chromozomu--------
 function GenerovaniNahodnehoChromozomu() {
   const chrom = [];
 
@@ -141,6 +152,7 @@ function GenerovaniNahodnehoChromozomu() {
     for (let x = 0; x < i; x++) {
       PovoleneVstupy.push(x + 1);
     }
+
     // Zbytek chromozomu pravidla pro tvoření vstupů
     PovoleneVstupy.push(...indexyKonstant);
 
@@ -164,11 +176,11 @@ function GenerovaniNahodnehoChromozomu() {
   
 
   chromozom.value = chrom;
-  console.log("Generovany chromozom", chrom);
+  console.log("Nahodne generovany chromozom", chrom);
   return chrom;
 }
 
-//Generování chromozomu s maximální délkou
+// -------Generování chromozomu s maximální délkou-------
 function GenerovaniMaximalnihoChromozomu() {
   const chrom = [];
   
@@ -198,7 +210,7 @@ function GenerovaniMaximalnihoChromozomu() {
       continue;
     }
 
-    // Muze vybrat jen predchozi uzel
+  // MUZE VYBRAT JEN PŘEDCHOZÍ UZEL
     PovoleneVstupy.push(i); 
     PovoleneVstupy.push(...indexyKonstant);
 
@@ -225,7 +237,7 @@ function GenerovaniMaximalnihoChromozomu() {
   return chrom;
 }
 
-//Nejlepší z populace rodičů
+// ------Generování chromozomu jako nejlepšího z N kandidátů------
 function GenerovaniNejlepsihoChromozomu() {
   let bestChrom = null;
   let bestFitness = -Infinity;
@@ -246,7 +258,7 @@ function GenerovaniNejlepsihoChromozomu() {
   return bestChrom;
 }
 
-//Switch pro různé typy inicilizace
+// -----Switch pro různé typy inicilizace------
 function GenerovaniChromozomu() {
   switch (typInicializace.value) {
     case 'random':
@@ -344,8 +356,6 @@ function ZobrazHodnotu() {
   zobrazit.value = true;
 }
 
-const HodnotyY = ref([]);
-
 // ----- Výpočet Y podle chromozomu -----
 function PocitaniY() {
   if (nactenaData.value.length === 0) return;
@@ -417,33 +427,36 @@ function MutaceChromozomu(chrom) {
 
 // ----- Fitness funkce -----
 function VypocitejFitness(chrom) {
-  if (nactenaData.value.length === 0) return -Infinity;
+  if (nactenaData.value.length === 0) return -Infinity; // Kontrola načtení dat
 
   let mse = 0;
   let invalidCount = 0;
 
+  // Cyklus projíždějící všemi daty a počítající MSE
   for (let i = 0; i < nactenaData.value.length; i++) {
     const { x, y: spravneY } = nactenaData.value[i];
     const predikovaneY = chrom_evaluate(chrom, x);
 
-    // Počítej neplatné hodnoty
+    // Další kontrola platnosti predikovaných hodnot
     if (isNaN(predikovaneY) || !isFinite(predikovaneY)) {
       invalidCount++;
       mse += 1000; // Velká penalizace
     } else {
-      const chyba = predikovaneY - spravneY;
+      const chyba = predikovaneY - spravneY; //Samotný výpočet chyby
       mse += Math.pow(chyba, 2);
     }
   }
 
-  // Pokud má chromozom příliš mnoho neplatných hodnot, silně penalizuj
+  // Pokud má chromozom příliš mnoho neplatných hodnot, penalizuj nekonečnem
   if (invalidCount > nactenaData.value.length * 0.5) {
     return -Infinity;
   }
-
+ 
+  // Průměrné MSE
   mse /= nactenaData.value.length;
-
-  // Penalizace pro funkce bez variability
+ 
+  //-- Další penalizace pro speciální případy ----
+  // 1)Penalizace pro funkce bez variability
   const predY = nactenaData.value.map(item => chrom_evaluate(chrom, item.x));
   const validPredY = predY.filter(y => isFinite(y) && !isNaN(y));
 
@@ -451,6 +464,7 @@ function VypocitejFitness(chrom) {
     return -Infinity;
   }
 
+  //Výpočet variance
   const mean = validPredY.reduce((sum, y) => sum + y, 0) / validPredY.length;
   const variance = validPredY.reduce((sum, y) => sum + Math.pow(y - mean, 2), 0) / validPredY.length;
 
@@ -458,27 +472,30 @@ function VypocitejFitness(chrom) {
     return -Infinity;
   }
 
-  // Penalizace pro funkce bez použití X
+  // 2)Penalizace pro funkce bez použití X
   const pouziteVstupy = chrom.some(v => v === 0);
   if (!pouziteVstupy) {
     return -Infinity;
   }
-  // Penalizace za složitost, dá se experimentovat s hodnotou
+
+  // 3)Penalizace za složitost, dá se experimentovat s hodnotou
   const aktivniUzly = SpocitejAktivniUzly(chrom);
   const komplexitaPenalizace = aktivniUzly * 0.001; // váha penalizace za složitost
 
   return -(mse + komplexitaPenalizace);
 }
 
-// Pomocná funkce pro spočítání aktivních uzlů
+// -------Pomocná funkce pro spočítání aktivních uzlů-------
 function SpocitejAktivniUzly(chrom) {
   const aktivni = new Set();
   const output = chrom[chrom.length - 1];
 
   function WatchChromozom(index) {
+    // Základní podmínky pro rekurzi
     if (index <= 0 || index >= 1001 || aktivni.has(index)) return;
     aktivni.add(index);
 
+    // Rekurzivní volání pro vstupy
     const in1 = chrom[(index - 1) * VelikostChromozomu + 0];
     const in2 = chrom[(index - 1) * VelikostChromozomu + 1];
     WatchChromozom(in1);
@@ -491,12 +508,14 @@ function SpocitejAktivniUzly(chrom) {
 
 // ----- Evoluční algoritmus -----
 async function EvolucniAlgoritmus() {
+
+  // Kontrola výběru funkcí
   if (vybraneFunkce.value.length === 0) {
     alert("Vyber alespoň jednu povolenou funkci!");
     return;
   }
 
-
+  // Inicializace evoluce
   EvoluceProbiha.value = true;
   zastavitEvoluci.value = false;
   logEvo.value = [];
@@ -505,12 +524,17 @@ async function EvolucniAlgoritmus() {
   let bestOffspring = [...parent];
   let bestOffspringFitness = bestFitness;
 
+  // Hlavní evoluční smyčka
   for (let g = 0; g < PocetIteraci.value; g++) {
+
+    // Kontrola zastavení uživatelem
     if (zastavitEvoluci.value) {
       logEvo.value.push(`Evoluce byla zastavena uživatelem na generaci ${g}.`);
       EvoluceProbiha.value = false;
       break;
     }
+
+    // Generování potomků a výběr nejlepšího
     for (let i = 0; i < lambda.value; i++) {
       let offspring = [...parent];
       MutaceChromozomu(offspring);
@@ -525,17 +549,20 @@ async function EvolucniAlgoritmus() {
     bestFitness = bestOffspringFitness;
     console.log(`Generace ${g}: bestFitness = ${bestFitness}`);
 
+    // Aktualizace grafu každých 5 generací
     if (g % 5 === 0) {
       chromozom.value = [...bestOffspring];
       updateChart(true);
       await new Promise(resolve => setTimeout(resolve, 0));
     }
 
+    // Kontrola dosažení cílové fitness
     if (-bestFitness < 0.01) {
       logEvo.value.push(`Dosaženo cílové fitness, Generace ${g}.`);
       break;
     }
 
+    // Logování každých 10 generací
     if (g % 10 === 0) {
       logEvo.value.push(`Generace ${g}: bestFitness = ${bestFitness.toFixed(6)}`);
       scrollLogToBottom();
@@ -548,19 +575,23 @@ async function EvolucniAlgoritmus() {
   const outputIndex = chromozom.value[COLS.value * VelikostChromozomu];
   predpisFunkce.value = FunkcniPredpis(outputIndex);
 
+  // Zobraz výsledky
   ZobrazHodnotu();
   PocitaniY();
 
+  // Finalní aktualizace grafu a zastavení animace, že evoluce probíhá
   await nextTick();
   updateChart(true);
   EvoluceProbiha.value = false;
 }
 
 
-// upravené updateChart: parametr showModel - pokud false, vykreslí jen scatter
+// ------ Aktualizace grafu -----
 function updateChart(showModel = true) {
+  // Kontrola platnosti dat
   if (!chartCanvas.value || nactenaData.value.length === 0) return;
 
+  // Zničení předchozí instance grafu
   if (chartInstance) {
     chartInstance.destroy();
     chartInstance = null;
@@ -585,7 +616,7 @@ function updateChart(showModel = true) {
     }
   ];
 
-  // přidat červenou křivku jen když showModel === true a chromozom existuje
+  // Přidání červené křivky, podmínka showModel === true a chromozom existuje
   if (showModel && chromozom.value && chromozom.value.length) {
     const lineData = nactenaData.value
       .map(item => ({ x: item.x, y: chrom_evaluate(chromozom.value, item.x) }))
@@ -605,6 +636,7 @@ function updateChart(showModel = true) {
     });
   }
 
+  // Vytvoření nové instance grafu
   chartInstance = new Chart(chartCanvas.value, {
     type: 'scatter',
     data: { datasets },
@@ -622,6 +654,8 @@ function updateChart(showModel = true) {
     }
   });
 }
+
+// ----- Automatické scrollování logu -----
 function scrollLogToBottom() {
   nextTick(() => {
     const logElement = document.querySelector('.log-content');
@@ -630,9 +664,12 @@ function scrollLogToBottom() {
     }
   });
 }
+
+// ----- Zastavení evoluce -----
 function ZastavitEvoluci() {
   zastavitEvoluci.value = true;
 }
+
 // -----Hledání funkčního předpisu podle chromozomu-----
 function FunkcniPredpis(index) {
   //Vstup X
@@ -661,9 +698,13 @@ function FunkcniPredpis(index) {
   const in2 = FunkcniPredpis(in2Index);
   const operatory = vybraneFunkce.value;
   let VyslednyPredpis = "";
+
+  // Pomocná funkce pro určení, zda je potřeba závorky
   const needsParens = (expr) => {
     return expr.includes('+') || expr.includes('-') || expr.includes('\\cdot') || expr.includes('\\div');
   };
+
+  // Sestavení výrazu podle operátoru
   switch (operatory[fnIndex]) {
     case "plus":
       VyslednyPredpis = `${in1} + ${in2}`;
@@ -691,6 +732,7 @@ function FunkcniPredpis(index) {
   }
   return VyslednyPredpis;
 }
+
 // MathJax pro správné vykreslení vzorců
 onMounted(() => {
   if (!window.MathJax) {
@@ -723,7 +765,7 @@ watch(predpisFunkce, () => {
     }
   });
 });
-nactiDataset();
+
 </script>
 
 <template>
