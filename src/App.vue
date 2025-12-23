@@ -15,8 +15,9 @@ const typKonstant = ref('fixed');
 const pocetFixnichKonstant = ref(10);
 const pocetEvolKonstant = ref(3);
 
-
-const vstupniCisla = ref("1,2,3,4,5,6,7,8,9,10");
+// Zpusoby inicializace chromozomu
+const typInicializace = ref('random');
+const PocetKandidatu = ref(100);
 
 const COLS = ref(10); // počet funkčních bloků v chromozomu
 const chromozom = ref([]);
@@ -104,8 +105,8 @@ function gaussianRandom(mean = 0, stdev = 1) {
   return z * stdev + mean;
 }
 
-// ----- Generování chromozomu -----
-function GenerovaniChromozomu() {
+// ----- Generování náhodného chromozomu -----
+function GenerovaniNahodnehoChromozomu() {
   const chrom = [];
 
   // Priprava indexu konstant
@@ -165,6 +166,98 @@ function GenerovaniChromozomu() {
   chromozom.value = chrom;
   console.log("Generovany chromozom", chrom);
   return chrom;
+}
+
+//Generování chromozomu s maximální délkou
+function GenerovaniMaximalnihoChromozomu() {
+  const chrom = [];
+  
+  // Indexy konstant 
+  let indexyKonstant = [];
+  if (typKonstant.value === 'fixed') {
+    const pocet = pocetFixnichKonstant.value;
+    for (let i = 0; i < pocet; i++) {
+      indexyKonstant.push(1001 + i);
+    }
+  } else {
+    for (let i = 0; i < pocetEvolKonstant.value; i++) {
+      indexyKonstant.push(2000 + i);
+    }
+  }
+
+  // Generování uzlů
+  for (let i = 0; i < COLS.value; i++) {
+    const PovoleneVstupy = [];
+
+    if (i === 0) {
+      const in1 = 0; // valX
+      const moznosti = [0, ...indexyKonstant];
+      const in2 = moznosti[Math.floor(Math.random() * moznosti.length)];
+      const fn = Math.floor(Math.random() * vybraneFunkce.value.length);
+      chrom.push(in1, in2, fn);
+      continue;
+    }
+
+    // Muze vybrat jen predchozi uzel
+    PovoleneVstupy.push(i); 
+    PovoleneVstupy.push(...indexyKonstant);
+
+    const in1 = PovoleneVstupy[Math.floor(Math.random() * PovoleneVstupy.length)];
+    const in2 = PovoleneVstupy[Math.floor(Math.random() * PovoleneVstupy.length)];
+    const fn = Math.floor(Math.random() * vybraneFunkce.value.length);
+
+    chrom.push(in1, in2, fn);
+  }
+
+  // Output = poslední uzel (maximální délka)
+  chrom.push(COLS.value);
+
+  // Evolvovatelné konstanty
+  if (typKonstant.value === 'evolvable') {
+    for (let i = 0; i < pocetEvolKonstant.value; i++) {
+      const konstanta = gaussianRandom(0, 2);
+      chrom.push(konstanta);
+    }
+  }
+
+  chromozom.value = chrom;
+  console.log("Generovany MAXIMALNI chromozom", chrom);
+  return chrom;
+}
+
+//Nejlepší z populace rodičů
+function GenerovaniNejlepsihoChromozomu() {
+  let bestChrom = null;
+  let bestFitness = -Infinity;
+
+  // Vygeneruj N kandidátů
+  for (let i = 0; i < PocetKandidatu.value; i++) {
+    const kandidat = GenerovaniNahodnehoChromozomu();
+    const fitness = VypocitejFitness(kandidat);
+    
+    if (fitness > bestFitness) {
+      bestChrom = [...kandidat];
+      bestFitness = fitness;
+    }
+  }
+
+  chromozom.value = bestChrom;
+  console.log(`Best of ${PocetKandidatu.value}: fitness = ${bestFitness}`);
+  return bestChrom;
+}
+
+//Switch pro různé typy inicilizace
+function GenerovaniChromozomu() {
+  switch (typInicializace.value) {
+    case 'random':
+      return GenerovaniNahodnehoChromozomu();
+    case 'maximal':
+      return GenerovaniMaximalnihoChromozomu();
+    case 'best_of_n':
+      return GenerovaniNejlepsihoChromozomu();
+    default:
+      return GenerovaniNahodnehoChromozomu();
+  }
 }
 
 // ----- Vyhodnocení chromozomu -----
@@ -376,6 +469,7 @@ function VypocitejFitness(chrom) {
 
   return -(mse + komplexitaPenalizace);
 }
+
 // Pomocná funkce pro spočítání aktivních uzlů
 function SpocitejAktivniUzly(chrom) {
   const aktivni = new Set();
@@ -671,6 +765,17 @@ nactiDataset();
             {{ f.label }}
           </label>
         </div>
+      </div>
+
+      <div class="nastaveni-panel">
+      <h3>Zpusob inicializace:</h3>
+        <label class="param-label">
+        <select v-model="typInicializace" class="param-input">
+          <option value="random">Náhodná inicializace</option>
+          <option value="maximal">Output poslední uzel</option>
+          <option value="best_of_n">Nejlepší ze 100</option>
+        </select>
+      </label>
       </div>
       <div class="nastaveni-panel">
       <h3>Typ konstant:</h3>
