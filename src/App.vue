@@ -25,7 +25,7 @@ const chromozom = ref([]);
 const VelikostChromozomu = 3;  // počet genů na jeden funkční blok (fixní hodnota 3)
 const lambda = ref(10);
 const PocetIteraci = ref(1000);
-const PravdepodobnostMutace = ref(0.05);
+const PravdepodobnostMutace = ref(0.2);
 const dostupneFunkce = [
   { name: "plus", label: "+" },
   { name: "minus", label: "-" },
@@ -796,6 +796,10 @@ watch(predpisFunkce, () => {
         <label>
           <input type="radio" v-model="vybranyDataset" value="KomplexniDataset.csv" @change="nactiDataset">
           Komplexni
+        </label>
+        <label>
+          <input type="radio" v-model="vybranyDataset" value="SikmyVrh.csv" @change="nactiDataset">
+          Sikmy Vrh
         </label>
       </div>
 
