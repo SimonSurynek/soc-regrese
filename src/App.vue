@@ -41,12 +41,93 @@ const vybraneFunkce = ref(["plus", "minus", "krat", "deleno", "log", "sqrt", "si
 const vybranyDataset = ref('LinearniZavislost.csv');
 const nactenaData = ref([]);
 
+// Vlastní data// Vlastní data
+const vlastniDataNahrana = ref(false);
+const vlastniDatasetNazev = ref('');
+
 // Graf, logy, tabulka
 const chartCanvas = ref(null);
 const logEvo = ref([]);
 const zobrazit = ref(false);
 let chartInstance = null;
 const HodnotyY = ref([]);
+
+// ---------Nahrání datsetu uživatelem----------
+function NahratVlastniData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  // Kontrola přípony
+  if (!file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
+    alert('Podporované formáty: .csv, .txt');
+    event.target.value = '';
+    return;
+  }
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const text = e.target.result;
+      
+      // Normalizace konců řádků
+      const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const lines = normalizedText.trim().split('\n');
+      
+      // Kontrola minimálního počtu řádků
+      if (lines.length < 2) {
+        throw new Error('Soubor musí obsahovat hlavičku a alespoň jeden řádek dat');
+      }
+      
+      // Parsování dat (přeskočit hlavičku)
+      const parsedData = lines.slice(1).map((line, index) => {
+        const parts = line.split(';');
+        
+        // Kontrola počtu sloupců
+        if (parts.length !== 2) {
+          throw new Error(`Řádek ${index + 2}: Očekávány 2 sloupce (x;y), nalezeno ${parts.length}`);
+        }
+        
+        const x = Number(parts[0]);
+        const y = Number(parts[1]);
+        
+        // Kontrola číselných hodnot
+        if (isNaN(x) || isNaN(y)) {
+          throw new Error(`Řádek ${index + 2}: Neplatná číselná hodnota (x="${parts[0]}", y="${parts[1]}")`);
+        }
+        
+        return { x, y };
+      });
+      
+      // Kontrola, že máme aspoň jeden bod
+      if (parsedData.length === 0) {
+        throw new Error('Soubor neobsahuje žádná platná data');
+      }
+      
+      // Úspěch - nahraď data
+      nactenaData.value = parsedData;
+      vlastniDataNahrana.value = true;
+      vlastniDatasetNazev.value = file.name;
+      vybranyDataset.value = 'vlastni'; // označení vlastního datasetu
+      
+      // Aktualizuj graf
+      nextTick(() => updateChart(false));
+      
+      console.log(`✅ Úspěšně nahráno ${parsedData.length} bodů z ${file.name}`);
+      
+    } catch (error) {
+      alert('❌ Chyba při čtení souboru:\n\n' + error.message + '\n\nOčekávaný formát:\nx;y\n1;2\n3;4');
+      event.target.value = ''; // Reset file input
+      vlastniDataNahrana.value = false;
+    }
+  };
+  
+  reader.onerror = () => {
+    alert('❌ Chyba při čtení souboru');
+    event.target.value = '';
+  };
+  
+  reader.readAsText(file);
+}
 
 // --------Načítání datasetu, zpracování---------
 async function nactiDataset() {
@@ -199,8 +280,6 @@ function GenerovaniMaximalnihoChromozomu() {
 
   // Generování uzlů
   for (let i = 0; i < COLS.value; i++) {
-    const PovoleneVstupy = [];
-
     if (i === 0) {
       const in1 = 0; // valX
       const moznosti = [0, ...indexyKonstant];
@@ -210,11 +289,16 @@ function GenerovaniMaximalnihoChromozomu() {
       continue;
     }
 
-  // MUZE VYBRAT JEN PŘEDCHOZÍ UZEL
-    PovoleneVstupy.push(i); 
+    // in1 = předchozí uzel (zaručuje propojení)
+    const in1 = i;
+    
+    // in2 = libovolný předchozí uzel nebo konstanta
+    const PovoleneVstupy = [];
+    for (let j = 0; j < i; j++) {
+      PovoleneVstupy.push(j);
+    }
     PovoleneVstupy.push(...indexyKonstant);
-
-    const in1 = PovoleneVstupy[Math.floor(Math.random() * PovoleneVstupy.length)];
+    
     const in2 = PovoleneVstupy[Math.floor(Math.random() * PovoleneVstupy.length)];
     const fn = Math.floor(Math.random() * vybraneFunkce.value.length);
 
@@ -329,7 +413,7 @@ function chrom_evaluate(chrom, valX) {
         result = Math.sin(in1);
         break;
       case "log":
-        result = in1 > 1e-10 ? Math.log(in1) : 0;
+        result = in1 > 0 ? Math.log(Math.abs(in1)) : 0;
         break;
       default:
         result = 0;
@@ -469,12 +553,6 @@ function VypocitejFitness(chrom) {
   const variance = validPredY.reduce((sum, y) => sum + Math.pow(y - mean, 2), 0) / validPredY.length;
 
   if (variance < 0.0001) {
-    return -Infinity;
-  }
-
-  // 2)Penalizace pro funkce bez použití X
-  const pouziteVstupy = chrom.some(v => v === 0);
-  if (!pouziteVstupy) {
     return -Infinity;
   }
 
@@ -766,6 +844,40 @@ watch(predpisFunkce, () => {
   });
 });
 
+// ----- Export výsledků do CSV -----
+function ExportVysledkuDoCSV() {
+  if (!chromozom.value || chromozom.value.length === 0) {
+    alert('Spusťte nejprve evoluci.');
+    return;
+  }
+  
+  const finalFitness = VypocitejFitness(chromozom.value);
+  const aktivniUzly = SpocitejAktivniUzly(chromozom.value);
+  const finalMSE = -finalFitness - (aktivniUzly * 0.05);
+  
+  let csv = "Parametr;Hodnota\n";
+  csv += `Dataset;${vybranyDataset.value}\n`;
+  csv += `Inicializace;${typInicializace.value}\n`;
+  csv += `Typ_konstant;${typKonstant.value}\n`;
+  csv += `Pocet_konstant;${typKonstant.value === 'fixed' ? pocetFixnichKonstant.value : pocetEvolKonstant.value}\n`;
+  csv += `Lambda;${lambda.value}\n`;
+  csv += `Generace_max;${PocetIteraci.value}\n`;
+  csv += `COLS;${COLS.value}\n`;
+  csv += `Mutace;${PravdepodobnostMutace.value}\n`;
+  csv += `Finalni_fitness;${finalFitness.toFixed(6)}\n`;
+  csv += `Finalni_MSE;${finalMSE.toFixed(6)}\n`;
+  csv += `Aktivni_uzly;${aktivniUzly}\n`;
+  csv += `Vysledny_vzorec;"${predpisFunkce.value}"\n`;
+  csv += `Timestamp;${new Date().toISOString()}\n`;
+  
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `vysledky_${vybranyDataset.value.replace('.csv', '')}_${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 </script>
 
 <template>
@@ -801,6 +913,17 @@ watch(predpisFunkce, () => {
           <input type="radio" v-model="vybranyDataset" value="SikmyVrh.csv" @change="nactiDataset">
           Sikmy Vrh
         </label>
+        <label>
+          <input type="radio" v-model="vybranyDataset" value="vlastni">
+          Vlastní data
+        </label>
+        <!-- File input - zobrazí se jen když je vybrán "Vlastní data" -->
+        <div v-if="vybranyDataset === 'vlastni'" class="vlastni-data-upload">
+          <input type="file" accept=".csv,.txt" @change="NahratVlastniData" class="file-input" ref="fileInputRef">
+          <p class="upload-hint">Formát: x;y (s hlavičkou)</p>
+          <!-- Úspěšné nahrání -->
+          <div v-if="vlastniDataNahrana" class="upload-success">✅ Nahráno: <strong>{{ vlastniDatasetNazev }}</strong><br>({{ nactenaData.length }} bodů)</div>
+        </div>
       </div>
 
       <div class="funkce-panel">
@@ -889,11 +1012,14 @@ watch(predpisFunkce, () => {
 
         <!-- Pravá část: Tlačítko + Log -->
         <div class="right-panel">
-          <button v-if="!EvoluceProbiha" id="EvoluceButton" @click="EvolucniAlgoritmus">Spusť evoluci</button>
-          <div v-else class="evolve-spinner">
-            <div class="spinner"></div>
-            <p>Evoluce běží...</p>
-            <button @click="ZastavitEvoluci" class="stop-button">Zastavit</button>
+          <div class="button-row" :class="{ 'single-button': HodnotyY.length === 0 || EvoluceProbiha }">
+            <button v-if="!EvoluceProbiha" id="EvoluceButton" @click="EvolucniAlgoritmus">Spusť evoluci</button>
+            <div v-else class="evolve-spinner">
+              <div class="spinner"></div>
+              <p>Evoluce běží...</p>
+              <button @click="ZastavitEvoluci" class="stop-button">Zastavit</button>
+            </div>
+            <button v-if="HodnotyY.length > 0 && !EvoluceProbiha" id="export-button" @click="ExportVysledkuDoCSV">📊 Export CSV</button>
           </div>
           <div id="evolog">
             <h3>Log evoluce:</h3>
@@ -1011,6 +1137,74 @@ watch(predpisFunkce, () => {
   font-size: 14px;
 }
 
+/* Vlastní data upload */
+.vlastni-data-upload {
+  margin-top: 12px;
+  padding: 12px;
+  background: #1a1a1a;
+  border-radius: 6px;
+  border: 1px dashed #667eea;
+}
+
+.file-input {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 8px;
+  background: #2a2a2a;
+  color: white;
+  border: 1px solid #444;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.file-input::-webkit-file-upload-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-right: 8px;
+}
+
+.file-input::-webkit-file-upload-button:hover {
+  opacity: 0.9;
+}
+
+.upload-hint {
+  color: #888;
+  font-size: 12px;
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.upload-hint code {
+  background: #0d0d0d;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  color: #4CAF50;
+}
+
+.upload-success {
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(76, 175, 80, 0.1);
+  border: 1px solid #4CAF50;
+  border-radius: 4px;
+  color: #4CAF50;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.upload-success strong {
+  color: white;
+}
+
 /* Funkce grid - 2 sloupce */
 .funkce-grid {
   display: grid;
@@ -1125,26 +1319,65 @@ canvas {
   /* ← PŘIDÁNO */
 }
 
-#EvoluceButton {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  padding: 15px;
+.button-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* Výchozí: 2 sloupce */
+  gap: 12px;
+  transition: grid-template-columns 0.3s ease; /* Hladký přechod */
+  align-items: stretch;
+}
+
+/* Když je jen jedno tlačítko */
+.button-row.single-button {
+  grid-template-columns: 1fr; /* Jen 1 sloupec */
+}
+
+/* Tlačítko evoluce */
+#EvoluceButton,
+#export-button {
+  padding: 15px 20px; 
   font-size: 16px;
   font-weight: 600;
   border-radius: 8px;
+  border: none;
   cursor: pointer;
-  transition: transform 0.2s;
-  flex-shrink: 0;
-  /* ← PŘIDÁNO: tlačítko se nezmenší */
+  line-height: 1.2;
+  text-align: center;
+  transition: all 0.2s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px; /* Mezera mezi emoji a textem */
 }
 
-#EvoluceButton:hover {
+#EvoluceButton {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+#export-button {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+}
+
+#EvoluceButton:hover,
+#export-button:hover {
   transform: translateY(-2px);
 }
 
-/* Evolve spinner */
+#export-button:hover {
+  box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+}
+
+#EvoluceButton:active,
+#export-button:active {
+  transform: translateY(0);
+}
+
+/* Spinner */
 .evolve-spinner {
+  grid-column: 1 / -1; /* Vždy přes všechny sloupce */
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -1152,7 +1385,6 @@ canvas {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 8px;
   padding: 15px;
-  flex-shrink: 0;
   gap: 12px;
 }
 
@@ -1166,13 +1398,8 @@ canvas {
 }
 
 @keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-
-  100% {
-    transform: rotate(360deg);
-  }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .evolve-spinner p {
@@ -1195,6 +1422,28 @@ canvas {
 
 .stop-button:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+
+/* Export tlačítko */
+#export-button {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  border: none;
+  padding: 15px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#export-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+}
+
+#export-button:active {
+  transform: translateY(0);
 }
 
 /* Log evoluce - OPRAVENÝ SCROLL */
