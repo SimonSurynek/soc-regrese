@@ -51,6 +51,7 @@ const logEvo = ref([]);
 const zobrazit = ref(false);
 let chartInstance = null;
 const HodnotyY = ref([]);
+const fitnessHistory = ref([]);
 
 // ---------Nahrání datsetu uživatelem----------
 function NahratVlastniData(event) {
@@ -413,7 +414,7 @@ function chrom_evaluate(chrom, valX) {
         result = Math.sin(in1);
         break;
       case "log":
-        result = in1 > 0 ? Math.log(Math.abs(in1)) : 0;
+        result = in1 > 1e-10 ? Math.log(in1) : 0;
         break;
       default:
         result = 0;
@@ -433,11 +434,6 @@ function chrom_evaluate(chrom, valX) {
 
   // Ošetři finální výsledek
   return (isNaN(finalResult) || !isFinite(finalResult)) ? 0 : finalResult;
-}
-
-// ----- Zobrazování chromozomu -----
-function ZobrazHodnotu() {
-  zobrazit.value = true;
 }
 
 // ----- Výpočet Y podle chromozomu -----
@@ -558,7 +554,7 @@ function VypocitejFitness(chrom) {
 
   // 3)Penalizace za složitost, dá se experimentovat s hodnotou
   const aktivniUzly = SpocitejAktivniUzly(chrom);
-  const komplexitaPenalizace = aktivniUzly * 0.001; // váha penalizace za složitost
+  const komplexitaPenalizace = aktivniUzly * 0.01; // váha penalizace za složitost
 
   return -(mse + komplexitaPenalizace);
 }
@@ -597,6 +593,7 @@ async function EvolucniAlgoritmus() {
   EvoluceProbiha.value = true;
   zastavitEvoluci.value = false;
   logEvo.value = [];
+  fitnessHistory.value = [];
   let parent = GenerovaniChromozomu();
   let bestFitness = VypocitejFitness(parent);
   let bestOffspring = [...parent];
@@ -627,6 +624,12 @@ async function EvolucniAlgoritmus() {
     bestFitness = bestOffspringFitness;
     console.log(`Generace ${g}: bestFitness = ${bestFitness}`);
 
+    // Uložení historie fitness
+    fitnessHistory.value.push({
+      generace: g,
+      fitness: bestFitness
+    });
+
     // Aktualizace grafu každých 5 generací
     if (g % 5 === 0) {
       chromozom.value = [...bestOffspring];
@@ -654,7 +657,6 @@ async function EvolucniAlgoritmus() {
   predpisFunkce.value = FunkcniPredpis(outputIndex);
 
   // Zobraz výsledky
-  ZobrazHodnotu();
   PocitaniY();
 
   // Finalní aktualizace grafu a zastavení animace, že evoluce probíhá
@@ -833,6 +835,33 @@ onMounted(() => {
     script.async = true;
     document.head.appendChild(script);
   }
+  // Automatický režim pro výsledky
+  const params = new URLSearchParams(window.location.search);
+  
+  if (params.get('auto') === 'true') {
+    console.log('Automatický režim');
+    
+    // Nastav parametry
+    if (params.get('dataset')) {
+    vybranyDataset.value = params.get('dataset');
+    nactiDataset(); 
+  }
+    if (params.get('lambda')) lambda.value = parseInt(params.get('lambda'));
+    if (params.get('cols')) COLS.value = parseInt(params.get('cols'));
+    if (params.get('mutace')) PravdepodobnostMutace.value = parseFloat(params.get('mutace'));
+    if (params.get('konstanty')) {pocetFixnichKonstant.value = parseInt(params.get('konstanty'));}
+
+    
+    // Spusť po 3 sekundách
+    setTimeout(async () => {
+      console.log('▶️ Spouštím...');
+      await EvolucniAlgoritmus();
+      await nextTick();
+      ExportVysledkuDoCSV();
+      document.title = '✅ HOTOVO';
+      console.log('✅ Hotovo!');
+    }, 3000);
+  }
 });
 
 // Watch pro re-render MathJax když se změní předpis
@@ -853,10 +882,17 @@ function ExportVysledkuDoCSV() {
   
   const finalFitness = VypocitejFitness(chromozom.value);
   const aktivniUzly = SpocitejAktivniUzly(chromozom.value);
-  const finalMSE = -finalFitness - (aktivniUzly * 0.05);
+  const finalMSE = -finalFitness - (aktivniUzly * 0.01); // Odečtení penalizace za složitost
+  
+  // Definice timestampu
+  const timestamp = Date.now();
+
   
   let csv = "Parametr;Hodnota\n";
   csv += `Dataset;${vybranyDataset.value}\n`;
+  if (vybranyDataset.value === 'vlastni' && vlastniDatasetNazev.value) {
+    csv += `Vlastni_soubor;${vlastniDatasetNazev.value}\n`;
+  }
   csv += `Inicializace;${typInicializace.value}\n`;
   csv += `Typ_konstant;${typKonstant.value}\n`;
   csv += `Pocet_konstant;${typKonstant.value === 'fixed' ? pocetFixnichKonstant.value : pocetEvolKonstant.value}\n`;
@@ -870,13 +906,28 @@ function ExportVysledkuDoCSV() {
   csv += `Vysledny_vzorec;"${predpisFunkce.value}"\n`;
   csv += `Timestamp;${new Date().toISOString()}\n`;
   
+  // Export parametrů a výsledků
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `vysledky_${vybranyDataset.value.replace('.csv', '')}_${Date.now()}.csv`;
+  a.download = `vysledky_${vybranyDataset.value.replace('.csv', '')}_${timestamp}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+
+  // Export fitness history
+  let csvHistory = "Generace;Fitness\n";
+  fitnessHistory.value.forEach(row => {
+    csvHistory += `${row.generace};${row.fitness}\n`;
+  });
+  
+  const blobHistory = new Blob([csvHistory], { type: 'text/csv;charset=utf-8;' });
+  const urlHistory = URL.createObjectURL(blobHistory);
+  const aHistory = document.createElement('a');
+  aHistory.href = urlHistory;
+  aHistory.download = `fitness_history_${vybranyDataset.value.replace('.csv', '')}_${timestamp}.csv`;
+  aHistory.click();
+  URL.revokeObjectURL(urlHistory);
 }
 </script>
 
@@ -1019,7 +1070,7 @@ function ExportVysledkuDoCSV() {
               <p>Evoluce běží...</p>
               <button @click="ZastavitEvoluci" class="stop-button">Zastavit</button>
             </div>
-            <button v-if="HodnotyY.length > 0 && !EvoluceProbiha" id="export-button" @click="ExportVysledkuDoCSV">📊 Export CSV</button>
+            <button v-if="HodnotyY.length > 0 && !EvoluceProbiha" id="export-button" @click="ExportVysledkuDoCSV">📊 Export Výsledků</button>
           </div>
           <div id="evolog">
             <h3>Log evoluce:</h3>
@@ -1035,11 +1086,11 @@ function ExportVysledkuDoCSV() {
         <div class="info-box">
           <h4>Funkční předpis:</h4>
           <div class="math-formula">
-            $f(x) = {{ predpisFunkce || 'x' }}$
+            $f(x) = {{ predpisFunkce }}$
           </div>
         </div>
 
-        <div class="info-box" id="Chrom-box" v-if="zobrazit">
+         <div class="info-box">
           <h4>Chromozom:</h4>
           <p>{{ chromozom }}</p>
         </div>
@@ -1053,7 +1104,7 @@ function ExportVysledkuDoCSV() {
               <th>x</th>
               <th>Očekávaná y</th>
               <th>Vypočítaná y</th>
-              <th>Odchylka</th>
+              <th>Absolutní odchylka</th>
             </tr>
           </thead>
           <tbody>
@@ -1061,8 +1112,7 @@ function ExportVysledkuDoCSV() {
               <td>{{ hodnota.x.toFixed(3) }}</td>
               <td>{{ hodnota.ySpravne?.toFixed(3) ?? 'N/A' }}</td>
               <td>{{ hodnota.yVypoctene?.toFixed(3) ?? 'N/A' }}</td>
-              <td>{{ hodnota.ySpravne ? ((hodnota.yVypoctene / hodnota.ySpravne - 1) * 100).toFixed(3) + '%' : 'N/A' }}
-              </td>
+              <td>{{ hodnota.ySpravne !== undefined ? Math.abs(hodnota.yVypoctene - hodnota.ySpravne).toFixed(3) : 'N/A' }}</td>
             </tr>
           </tbody>
         </table>
@@ -1499,36 +1549,27 @@ canvas {
   border: 1px solid #333;
   overflow: hidden;
   display: flex;
-  flex-direction: row;
-  /* ← ZMĚNA z column na row */
+  flex-direction: row; 
   align-items: center;
-  /* ← PŘIDEJ toto pro vertikální zarovnání */
   gap: 8px;
-  /* ← PŘIDEJ mezeru mezi h4 a vzorcem */
-}
-
-#Chrom-box {
-  flex-direction: column;
-  /* ← Chromozom zůstane ve sloupci */
-  gap: 0px;
 }
 
 .info-box h4 {
   color: white;
   font-size: 13px;
   margin-bottom: 0px;
+  flex-shrink: 0;
 }
 
 .info-box p {
   color: #aaa;
-  font-size: 12px;
+  font-size: 14px;
   white-space: nowrap;
   overflow-x: auto;
   overflow-y: hidden;
-  scrollbar-width: none;
-  /* ← Firefox */
-  -ms-overflow-style: none;
-  /* ← IE/Edge */
+  scrollbar-width: thin;  
+  padding: 4px 0;
+  flex: 1; 
 }
 
 .math-formula {
@@ -1538,6 +1579,7 @@ canvas {
   overflow-y: hidden;
   padding: 4px 0;
   scrollbar-width: thin;
+  flex: 1;
 }
 
 .math-formula::-webkit-scrollbar {
@@ -1549,9 +1591,23 @@ canvas {
   border-radius: 2px;
 }
 
-/* Schová scrollbar v Chrome/Safari */
+/* Styling scrollbaru pro Chrome/Safari/Edge */
 .info-box p::-webkit-scrollbar {
-  display: none;
+  height: 6px;
+}
+
+.info-box p::-webkit-scrollbar-track {
+  background: #1a1a1a;
+  border-radius: 3px;
+}
+
+.info-box p::-webkit-scrollbar-thumb {
+  background: #444;  /*Šedý jako u math-formula */
+  border-radius: 3px;
+}
+
+.info-box p::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
 /* Dolní řádek: Tabulka */
