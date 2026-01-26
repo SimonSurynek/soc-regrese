@@ -4,6 +4,40 @@ import { Chart } from 'chart.js/auto'
 
 const log = ref("");
 
+//Pro v-for k zobrazení funkčního předpisu datasetu
+const datasety = [
+  { 
+    value: 'LinearniZavislost.csv', 
+    label: 'Lineární',
+    formula: 'f(x) = 2x + 3'
+  },
+  { 
+    value: 'KvadratickaZavislost.csv', 
+    label: 'Kvadratická',
+    formula: 'f(x) = (x + 2)² + 3'
+  },
+  { 
+    value: 'SinusovaZavislost.csv', 
+    label: 'Sinusová',
+    formula: 'f(x) = 6·sin(2x+1)'
+  },
+  { 
+    value: 'LogaritmickaZavislost.csv', 
+    label: 'Logaritmická',
+    formula: 'f(x) = 5·log(x + 1) + 0.5'
+  },
+  { 
+    value: 'KomplexniDataset.csv', 
+    label: 'Komplexní',
+    formula: 'f(x) = x² + 2·sin(2x) - 0.3x'
+  },
+  { 
+    value: 'SikmyVrh.csv', 
+    label: 'Šikmý Vrh',
+    formula: 'y(x) = x − 0.0245·x²'
+  }
+];
+
 // Stavy evoluce  pro tlacitko
 const EvoluceProbiha = ref(false);
 const zastavitEvoluci = ref(false);
@@ -11,7 +45,7 @@ const zastavitEvoluci = ref(false);
 const predpisFunkce = ref("");
 
 //pro vybirani typu a poctu konstant
-const typKonstant = ref('fixed');
+const typKonstant = ref('evolvable');
 const pocetFixnichKonstant = ref(10);
 const pocetEvolKonstant = ref(3);
 
@@ -23,8 +57,8 @@ const PocetKandidatu = ref(100);
 const COLS = ref(10); // počet funkčních bloků v chromozomu
 const chromozom = ref([]);
 const VelikostChromozomu = 3;  // počet genů na jeden funkční blok (fixní hodnota 3)
-const lambda = ref(10);
-const PocetIteraci = ref(1000);
+const lambda = ref(20);
+const PocetIteraci = ref(5000);
 const PravdepodobnostMutace = ref(0.2);
 const dostupneFunkce = [
   { name: "plus", label: "+" },
@@ -537,6 +571,7 @@ function VypocitejFitness(chrom) {
  
   //-- Další penalizace pro speciální případy ----
   // 1)Penalizace pro funkce bez variability
+  // Penalizace nízké variability
   const predY = nactenaData.value.map(item => chrom_evaluate(chrom, item.x));
   const validPredY = predY.filter(y => isFinite(y) && !isNaN(y));
 
@@ -544,17 +579,24 @@ function VypocitejFitness(chrom) {
     return -Infinity;
   }
 
-  //Výpočet variance
   const mean = validPredY.reduce((sum, y) => sum + y, 0) / validPredY.length;
   const variance = validPredY.reduce((sum, y) => sum + Math.pow(y - mean, 2), 0) / validPredY.length;
 
-  if (variance < 0.0001) {
+  // Kontroluj varianci pouze pokud dataset není konstantní
+  const targetMean = nactenaData.value.reduce((sum, item) => sum + item.y, 0) / nactenaData.value.length;
+  const targetVariance = nactenaData.value.reduce((sum, item) => {
+    const diff = item.y - targetMean;
+    return sum + diff * diff;
+  } , 0) / nactenaData.value.length;
+
+  // Pokud má dataset variaci, ale predikce ne, penalizuj
+  if (targetVariance > 0.01 && variance < 0.0001) {
     return -Infinity;
   }
 
-  // 3)Penalizace za složitost, dá se experimentovat s hodnotou
+  // 2)Penalizace za složitost, dá se experimentovat s hodnotou
   const aktivniUzly = SpocitejAktivniUzly(chrom);
-  const komplexitaPenalizace = aktivniUzly * 0.01; // váha penalizace za složitost
+  const komplexitaPenalizace = aktivniUzly * 0.002; // váha penalizace za složitost
 
   return -(mse + komplexitaPenalizace);
 }
@@ -614,7 +656,7 @@ async function EvolucniAlgoritmus() {
       let offspring = [...parent];
       MutaceChromozomu(offspring);
       let offspringFitness = VypocitejFitness(offspring);
-      if (offspringFitness > bestOffspringFitness) {
+      if (offspringFitness >= bestOffspringFitness) {
         bestOffspring = [...offspring];
         bestOffspringFitness = offspringFitness;
       }
@@ -813,7 +855,6 @@ function FunkcniPredpis(index) {
   return VyslednyPredpis;
 }
 
-// MathJax pro správné vykreslení vzorců
 onMounted(() => {
   if (!window.MathJax) {
     window.MathJax = {
@@ -835,6 +876,7 @@ onMounted(() => {
     script.async = true;
     document.head.appendChild(script);
   }
+  
   // Automatický režim pro výsledky
   const params = new URLSearchParams(window.location.search);
   
@@ -843,23 +885,45 @@ onMounted(() => {
     
     // Nastav parametry
     if (params.get('dataset')) {
-    vybranyDataset.value = params.get('dataset');
-    nactiDataset(); 
+      vybranyDataset.value = params.get('dataset');
+      nactiDataset(); 
+    }
+    if (params.get('lambda')) {
+      lambda.value = parseInt(params.get('lambda'));
+    }
+    if (params.get('inicializace')) {
+    typInicializace.value = params.get('inicializace');
   }
-    if (params.get('lambda')) lambda.value = parseInt(params.get('lambda'));
-    if (params.get('cols')) COLS.value = parseInt(params.get('cols'));
-    if (params.get('mutace')) PravdepodobnostMutace.value = parseFloat(params.get('mutace'));
-    if (params.get('konstanty')) {pocetFixnichKonstant.value = parseInt(params.get('konstanty'));}
+    if (params.get('cols')) {
+      COLS.value = parseInt(params.get('cols'));
+    }
+    if (params.get('mutace')) {
+      PravdepodobnostMutace.value = parseFloat(params.get('mutace'));
+    }
+    if (params.has('generace')) {
+      PocetIteraci.value = parseInt(params.get('generace'));
+    }
+    if (params.get('typ_konstant')) {
+      typKonstant.value = params.get('typ_konstant');
+    }
 
+    if (params.get('pocet_konstant')) {
+      const pocet = parseInt(params.get('pocet_konstant'));
+      if (typKonstant.value === 'fixed') {
+      pocetFixnichKonstant.value = pocet;
+      } else if (typKonstant.value === 'evolvable') {
+      pocetEvolKonstant.value = pocet;
+      }
+    }
     
     // Spusť po 3 sekundách
     setTimeout(async () => {
-      console.log('▶️ Spouštím...');
+      console.log('Spouštím...');
       await EvolucniAlgoritmus();
       await nextTick();
       ExportVysledkuDoCSV();
-      document.title = '✅ HOTOVO';
-      console.log('✅ Hotovo!');
+      document.title = 'HOTOVO';
+      console.log('Hotovo!');
     }, 3000);
   }
 });
@@ -882,7 +946,7 @@ function ExportVysledkuDoCSV() {
   
   const finalFitness = VypocitejFitness(chromozom.value);
   const aktivniUzly = SpocitejAktivniUzly(chromozom.value);
-  const finalMSE = -finalFitness - (aktivniUzly * 0.01); // Odečtení penalizace za složitost
+  const finalMSE = -finalFitness - (aktivniUzly * 0.002); // Odečtení penalizace za složitost
   
   // Definice timestampu
   const timestamp = Date.now();
@@ -940,32 +1004,13 @@ function ExportVysledkuDoCSV() {
     <aside id="LevaCast">
       <div id="VyberDatasetu">
         <h3>Výběr datasetu:</h3>
-        <label>
-          <input type="radio" v-model="vybranyDataset" value="LinearniZavislost.csv" @change="nactiDataset">
-          Lineární
+        <label v-for="dataset in datasety" :key="dataset.value">
+          <input type="radio" v-model="vybranyDataset" :value="dataset.value" @change="nactiDataset">
+          {{ dataset.label }}
+          <span v-if="dataset.formula" class="info-icon" :title="dataset.formula">ⓘ</span>
         </label>
         <label>
-          <input type="radio" v-model="vybranyDataset" value="KvadratickaZavislost.csv" @change="nactiDataset">
-          Kvadratická
-        </label>
-        <label>
-          <input type="radio" v-model="vybranyDataset" value="SinusovaZavislost.csv" @change="nactiDataset">
-          Sinusová
-        </label>
-        <label>
-          <input type="radio" v-model="vybranyDataset" value="LogaritmickaZavislost.csv" @change="nactiDataset">
-          Logaritmická
-        </label>
-        <label>
-          <input type="radio" v-model="vybranyDataset" value="KomplexniDataset.csv" @change="nactiDataset">
-          Komplexni
-        </label>
-        <label>
-          <input type="radio" v-model="vybranyDataset" value="SikmyVrh.csv" @change="nactiDataset">
-          Sikmy Vrh
-        </label>
-        <label>
-          <input type="radio" v-model="vybranyDataset" value="vlastni">
+          <input type="radio" v-model="vybranyDataset" value="vlastni" @change="nactiDataset">
           Vlastní data
         </label>
         <!-- File input - zobrazí se jen když je vybrán "Vlastní data" -->
@@ -1187,6 +1232,18 @@ function ExportVysledkuDoCSV() {
   font-size: 14px;
 }
 
+.info-icon {
+  margin-left: 5px;
+  font-size: 16px;
+  color: #aaaaaa; 
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.info-icon:hover {
+  color: #ffffff; 
+  transform: scale(1.15);
+}
 /* Vlastní data upload */
 .vlastni-data-upload {
   margin-top: 12px;
