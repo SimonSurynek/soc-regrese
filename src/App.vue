@@ -725,38 +725,39 @@ function updateChart(showModel = true) {
     y: item.y
   }));
 
-  const datasets = [
-    {
-      label: 'Správná data (CSV)',
-      data: scatterData,
-      backgroundColor: 'rgba(54, 162, 235, 0.8)',
-      borderColor: 'rgba(54, 162, 235, 1)',
-      pointRadius: 6,
-      type: 'scatter',
-      showLine: false,
-      parsing: false
-    }
-  ];
+  const datasets = [];
 
-  // Přidání červené křivky, podmínka showModel === true a chromozom existuje
-  if (showModel && chromozom.value && chromozom.value.length) {
-    const lineData = nactenaData.value
-      .map(item => ({ x: item.x, y: chrom_evaluate(chromozom.value, item.x) }))
-      .sort((a, b) => a.x - b.x);
+// Přidání červené křivky PRVNÍ (bude DOLE)
+if (showModel && chromozom.value && chromozom.value.length) {
+  const lineData = nactenaData.value
+    .map(item => ({ x: item.x, y: chrom_evaluate(chromozom.value, item.x) }))
+    .sort((a, b) => a.x - b.x);
 
-    datasets.push({
-      label: 'Naučená funkce',
-      data: lineData,
-      backgroundColor: 'rgba(255, 99, 132, 0.2)',
-      borderColor: 'rgba(255, 99, 132, 1)',
-      borderWidth: 2,
-      pointRadius: 0,
-      type: 'line',
-      tension: 0.4,
-      parsing: false,
-      showLine: true
-    });
-  }
+  datasets.push({
+    label: 'Naučená funkce',
+    data: lineData,
+    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+    borderColor: 'rgba(255, 99, 132, 1)',
+    borderWidth: 2,
+    pointRadius: 0,
+    type: 'line',
+    tension: 0.4,
+    parsing: false,
+    showLine: true
+  });
+}
+
+// Přidání bodů DRUHÉ (budou NAVRCHU)
+datasets.push({
+  label: 'Správná data (CSV)',
+  data: scatterData,
+  backgroundColor: 'rgba(54, 162, 235, 0.8)',
+  borderColor: 'rgba(54, 162, 235, 1)',
+  pointRadius: 6,
+  type: 'scatter',
+  showLine: false,
+  parsing: false
+});
 
   // Vytvoření nové instance grafu
   chartInstance = new Chart(chartCanvas.value, {
